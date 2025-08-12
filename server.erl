@@ -54,7 +54,7 @@ loop(State) ->
 start_model(State) ->
     case State#server_state.started of 
         true -> 
-                io:format("The model has already been initialized~n"),
+                io:format("The server has already been initialized~n"),
                 State;
         false ->
                 Banks = [danske, jyske, al, nordea, lunar],
