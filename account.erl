@@ -26,5 +26,16 @@ loop(State) ->
         print_balance ->
             io:format("The balance is ~p~n",
                     [State#account_state.balance]),
+            loop(State);
+        {print_balance_with_owner, MobileAppID} ->
+            print_balance_with_owner(State, MobileAppID),
             loop(State)
     end.
+
+
+%% Function that prints the balance and a user name
+print_balance_with_owner(State, MobileAppID) ->
+    io:format("The balance of ~p is ~p ~n",
+                    [MobileAppID, State#account_state.balance ]).
+
+

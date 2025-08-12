@@ -24,6 +24,9 @@ loop(State) ->
         {payment_request, AccountA1, AccountA2, Amount} -> 
             State#mobile_app_state.bankID ! {transaction, AccountA1, AccountA2, Amount, self()},
         loop(State);
+        print_balance -> 
+            State#mobile_app_state.account !{print_balance_with_owner, State#mobile_app_state.username},
+        loop(State);
         {send_N_requests, AccountA1, AccountA2, N} ->
             handle_n_requests(AccountA1, AccountA2, N, State),
         loop(State)
