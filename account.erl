@@ -23,10 +23,8 @@ loop(State) ->
             NewState = transaction_handler(State,BankID, Mobile_app_ID, TargetAccount, Amount),
             loop(NewState);
         {deposit, Amount} -> 
-            % TODO implement deposit in a way that only adds money.
-            NewBalance = State#account_state.balance + Amount,
-            NewState = State#account_state{balance = NewBalance},
-        loop(NewState);
+            NewState = deposit_hanlder(State,Amount),
+            loop(NewState);
         print_balance ->
             io:format("The balance is ~p~n",
                     [State#account_state.balance]),
@@ -50,8 +48,15 @@ transaction_handler(State,BankID,Mobile_app_ID, TargetAccount, Amount) ->
                 State;
             false-> 
                 NewState = State#account_state{balance = NewBalance},
+                TargetAccount ! {deposit, Amount},
                 NewState
     end.
+
+deposit_hanlder(State, Amount) ->
+    NewBalance = State#account_state.balance + Amount,
+    NewState = State#account_state{balance = NewBalance},
+    NewState.
+
                 
 
 
