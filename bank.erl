@@ -23,18 +23,16 @@ loop(State) ->
             NewState = State#bank_state{accounts = UpdatedMap},
         loop(NewState);
 
-        {transaction, AccountA1, AccountA2, Amount,Mobile_app_ID} ->
-            case maps:is_key(AccountA1, State#bank_state.accounts) of
+        {transaction, SourceAccount, TargetAccount, Amount, Mobile_app_ID} ->
+            case maps:is_key(SourceAccount, State#bank_state.accounts) of
                 false  -> 
                     io:format("The sender account is not registered in ~p Bank~n", [State#bank_state.bankname]),
                     loop(State);
                 true ->
-                    Value = maps:get(AccountA1, State#bank_state.accounts),
+                    Value = maps:get(SourceAccount, State#bank_state.accounts),
                     case Value == Mobile_app_ID of
-                        true -> 
-                            MinusAmount = Amount * -1,
-                            AccountA1 ! {deposit, MinusAmount},
-                            AccountA2 ! {deposit, Amount},
+                        true ->
+                            SourceAccount ! {transaction, self(), Mobile_app_ID, TargetAccount, Amount},
                             loop(State);
                         false -> 
                             io:format("The sender account is not owned by the user ~n"),
