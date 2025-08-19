@@ -41,6 +41,10 @@ loop(State) ->
                             loop(State)
                     end
             end;
+        {payment_failed, Mobile_app_ID, SourceAccount, TargetAccount, Amount} -> 
+            % TODO send a message to the mobile app to inform a payment failed due to low balance
+            
+        loop(State);
         print_accounts ->
                 io:format("The bank has this accounts ~p~n",
                         [State#bank_state.accounts]),

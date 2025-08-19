@@ -21,8 +21,11 @@ init(AccountID, Username, BankID) ->
 %% function with the behavior of the mobile app actor upon receiving messages
 loop(State) ->
     receive
-        {payment_request, AccountA1, AccountA2, Amount} -> 
-            State#mobile_app_state.bankID ! {transaction, AccountA1, AccountA2, Amount, self()},
+        {payment_request, SourceAccount, TargetAccount, Amount} -> 
+            State#mobile_app_state.bankID ! {transaction, SourceAccount, TargetAccount, Amount, self()},
+        loop(State);
+        {payment_failed, SourceAccount, TargetAccount, Amount} -> 
+            % TODO implement a print when the payment fails 
         loop(State);
         print_balance -> 
             State#mobile_app_state.account !{print_balance_with_owner, State#mobile_app_state.username},
