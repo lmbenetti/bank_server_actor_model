@@ -39,8 +39,8 @@ loop(State) ->
                             loop(State)
                     end
             end;
-        {payment_failed, Mobile_app_ID, SourceAccount, TargetAccount, Amount} -> 
-            payment_failed_handler(Mobile_app_ID, SourceAccount, TargetAccount, Amount), 
+        {payment_failed, Mobile_app_ID, TargetAccount, Amount} -> 
+            payment_failed_handler(State, Mobile_app_ID, TargetAccount, Amount), 
             loop(State);
         print_accounts ->
                 io:format("The bank has this accounts ~p~n",
@@ -48,5 +48,6 @@ loop(State) ->
                 loop(State)
     end.
 
-payment_failed_handler(Mobile_app_ID, SourceAccount, TargetAccount, Amount) ->
-    Mobile_app_ID ! {payment_failed, SourceAccount, TargetAccount, Amount,  self()}.
+%% Functiont that send the Mobile App a message, letting it know that a payment has failed.
+payment_failed_handler(State, Mobile_app_ID, TargetAccount, Amount) ->
+    Mobile_app_ID ! {payment_failed, TargetAccount, Amount, State#bank_state.bankname}.

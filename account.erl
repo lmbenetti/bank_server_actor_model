@@ -40,11 +40,12 @@ print_balance_with_owner(State, MobileAppID) ->
     io:format("The balance of ~p is ~p ~n",
                     [MobileAppID, State#account_state.balance ]).
 
+%% Function that handles trasactions. It checks that the balance is enough to pay the request
 transaction_handler(State,BankID,Mobile_app_ID, TargetAccount, Amount) ->
     NewBalance = State#account_state.balance - Amount,
     case NewBalance < 0 of
             true ->
-                BankID ! {payment_failed, Mobile_app_ID, self(), TargetAccount, Amount},
+                BankID ! {payment_failed, Mobile_app_ID, TargetAccount, Amount},
                 State;
             false-> 
                 NewState = State#account_state{balance = NewBalance},
@@ -52,6 +53,7 @@ transaction_handler(State,BankID,Mobile_app_ID, TargetAccount, Amount) ->
                 NewState
     end.
 
+%% Function that handles deposits
 deposit_hanlder(State, Amount) ->
     NewBalance = State#account_state.balance + Amount,
     NewState = State#account_state{balance = NewBalance},
