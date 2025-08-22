@@ -21,7 +21,7 @@ loop(State) ->
         {newAccount, Mobile_app_ID, Account} -> 
             UpdatedMap = (State#bank_state.accounts)#{Account => Mobile_app_ID},
             NewState = State#bank_state{accounts = UpdatedMap},
-        loop(NewState);
+            loop(NewState);
 
         {transaction, SourceAccount, TargetAccount, Amount, Mobile_app_ID} ->
             case maps:is_key(SourceAccount, State#bank_state.accounts) of
@@ -40,11 +40,13 @@ loop(State) ->
                     end
             end;
         {payment_failed, Mobile_app_ID, SourceAccount, TargetAccount, Amount} -> 
-            % TODO send a message to the mobile app to inform a payment failed due to low balance
-            
-        loop(State);
+            payment_failed_handler(Mobile_app_ID, SourceAccount, TargetAccount, Amount), 
+            loop(State);
         print_accounts ->
                 io:format("The bank has this accounts ~p~n",
                         [State#bank_state.accounts]),
                 loop(State)
     end.
+
+payment_failed_handler(Mobile_app_ID, SourceAccount, TargetAccount, Amount) ->
+    Mobile_app_ID ! {payment_failed, SourceAccount, TargetAccount, Amount,  self()}.
