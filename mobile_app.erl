@@ -14,7 +14,7 @@ start_reg(AccountID, Username, BankID) ->
 %% function that initalizes the state of the mobile app actor
 init(AccountID, Username, BankID) ->
     State = #mobile_app_state{account = AccountID, username = Username, bankID = BankID},
-    State#mobile_app_state.bankID ! {newAccount, self(), State#mobile_app_state.account},
+    State#mobile_app_state.bankID ! {new_account, self(), State#mobile_app_state.account},
     loop(State).
 
 
