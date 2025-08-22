@@ -19,10 +19,12 @@ init(AccountName) ->
 %% Function with the behavior of the account actor upon receiving messages
 loop(State) ->
     receive
+        {transaction, BankID, Mobile_app_ID, TargetAccount, Amount} ->
+            NewState = transaction_handler(State,BankID, Mobile_app_ID, TargetAccount, Amount),
+            loop(NewState);
         {deposit, Amount} -> 
-            NewBalance = State#account_state.balance + Amount,
-            NewState = State#account_state{balance = NewBalance},
-        loop(NewState);
+            NewState = deposit_hanlder(State,Amount),
+            loop(NewState);
         print_balance ->
             io:format("The balance is ~p~n",
                     [State#account_state.balance]),
@@ -37,5 +39,29 @@ loop(State) ->
 print_balance_with_owner(State, MobileAppID) ->
     io:format("The balance of ~p is ~p ~n",
                     [MobileAppID, State#account_state.balance ]).
+
+%% Function that handles trasactions. It checks that the balance is enough to pay the request
+transaction_handler(State,BankID,Mobile_app_ID, TargetAccount, Amount) ->
+    NewBalance = State#account_state.balance - Amount,
+    case NewBalance < 0 of
+            true ->
+                BankID ! {payment_failed, Mobile_app_ID, TargetAccount, Amount},
+                State;
+            false-> 
+                NewState = State#account_state{balance = NewBalance},
+                TargetAccount ! {deposit, Amount},
+                NewState
+    end.
+
+%% Function that handles deposits
+deposit_hanlder(State, Amount) ->
+    NewBalance = State#account_state.balance + Amount,
+    NewState = State#account_state{balance = NewBalance},
+    NewState.
+
+                
+
+
+
 
 

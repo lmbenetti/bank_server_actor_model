@@ -14,15 +14,18 @@ start_reg(AccountID, Username, BankID) ->
 %% function that initalizes the state of the mobile app actor
 init(AccountID, Username, BankID) ->
     State = #mobile_app_state{account = AccountID, username = Username, bankID = BankID},
-    State#mobile_app_state.bankID ! {newAccount, self(), State#mobile_app_state.account},
+    State#mobile_app_state.bankID ! {new_account, self(), State#mobile_app_state.account},
     loop(State).
 
 
 %% function with the behavior of the mobile app actor upon receiving messages
 loop(State) ->
     receive
-        {payment_request, AccountA1, AccountA2, Amount} -> 
-            State#mobile_app_state.bankID ! {transaction, AccountA1, AccountA2, Amount, self()},
+        {payment_request, SourceAccount, TargetAccount, Amount} -> 
+            State#mobile_app_state.bankID ! {transaction, SourceAccount, TargetAccount, Amount, self()},
+        loop(State);
+        {payment_failed, TargetAccount, Amount, BankName} -> 
+            payment_failed_handler(TargetAccount, Amount, BankName), 
         loop(State);
         print_balance -> 
             State#mobile_app_state.account !{print_balance_with_owner, State#mobile_app_state.username},
@@ -42,4 +45,9 @@ handle_n_requests(AccountA1, AccountA2, N, State) ->
                 State#mobile_app_state.bankID ! {transaction, AccountA1, AccountA2, 1, self()},
                 handle_n_requests(AccountA1, AccountA2, (N-1), State)
         end.
+
+%% function that informs the user that a payment has failed due to insuficient balance
+payment_failed_handler(TargetAccount, Amount, BankID)->
+    io:format("The bank ~p has informed that the transaction to the account ~p for $ ~p, has failed due to insuficient balance~n",
+                        [BankID, TargetAccount, Amount]).
 

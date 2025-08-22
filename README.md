@@ -28,12 +28,13 @@ This bank server is a toy project created to implement a simple case of the acto
 
 ## 📋 Rules
 - A mobile app can only make payments from accounts it owns.  
-- Unauthorized payment requests are rejected.  
+- Unauthorized payment requests are rejected.
+- Payments larger than the balance are rejected.
 
 
 ## 📈 Possible Improvements
 This simple project could be further improved with the following:
-- Denying payments that would generate negative balances.
+- ~~Denying payments that would generate negative balances.~~ (Done 22/08)
 - Keeping a register in the server to prevent two mobile apps from using the same account.
 - Allowing the creation of mobile apps without a bank and an account, that could later be added.
 - Do you have an idea? Open an issue or PR!
@@ -43,7 +44,7 @@ This simple project could be further improved with the following:
 2. Clone the repo.
 3. Run `erlc *erl` to compile the modules.
 4. Run `erl` to start the Erlang shell.
-5. Run `server:start_reg(test).` to create a server.
+5. Run `server:start_reg(test).` to create a server. Test is an arbitrary name.
 6. You can run `test ! easy_start` to automatically create banks, accounts and mobile apps. Otherwise you can create them manually.
 
 ## 📋 Allowed server requests
