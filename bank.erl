@@ -35,7 +35,7 @@ loop(State) ->
 
 %% Functiont that send the Mobile App a message, letting it know that a payment has failed.
 payment_failed_handler(State, Mobile_app_ID, TargetAccount, Amount) ->
-    Mobile_app_ID ! {payment_failed, TargetAccount, Amount, State#bank_state.bankname}.
+    Mobile_app_ID ! {payment_failed_balance, TargetAccount, Amount, State#bank_state.bankname}.
 
 %% Function that creates a new account in the bank's register
 new_account_handler(State, Mobile_app_ID, AccountID) ->

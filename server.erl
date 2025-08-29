@@ -170,7 +170,12 @@ print_balances(State) ->
 
 % Function that request payments between mobile apps
 make_payment(MobileAppSender, AccountIDSender, AccountIDReceiver, Amount) ->
-    MobileAppSender ! {payment_request, AccountIDSender, AccountIDReceiver, Amount}.
+    case Amount < 1 of
+        true -> 
+            MobileAppSender ! {payment_failed_amount, AccountIDReceiver, Amount};
+        false ->
+            MobileAppSender ! {payment_request, AccountIDSender, AccountIDReceiver, Amount}
+    end.
 
 
 
