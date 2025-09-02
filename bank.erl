@@ -21,7 +21,7 @@ loop(State) ->
         {new_account, Mobile_app_ID, AccountID} -> 
             NewState = new_account_handler(State, Mobile_app_ID, AccountID),
             loop(NewState); %To delete
-        {open_account, Mobile_app_ID, PersonID} -> 
+        {open_account, PersonID} -> 
             NewState = open_account_handler(State,PersonID),
             loop(NewState);
         {transaction, SourceAccount, TargetAccount, Amount, Mobile_app_ID} ->
@@ -49,11 +49,16 @@ new_account_handler(State, Mobile_app_ID, AccountID) ->
 
 %% Function that creates a new account in the bank's register
 open_account_handler(State, PersonID) ->
-
-
-    UpdatedMap = (State#bank_state.accounts)#{AccountID => Mobile_app_ID},
-    NewState = State#bank_state{accounts = UpdatedMap},
-    NewState.
+    case has_an_account(State#bank_state.accounts,PersonID) of
+        true -> 
+            io:format("This person already has an account in this bank~n"),
+            State;
+        false -> 
+            UpdatedMap = (State#bank_state.accounts)#{PersonID => State#bank_state.last_account_number},
+            UpdatedLastAccountNumber = State#bank_state.last_account_number +1, 
+            NewState = State#bank_state{accounts = UpdatedMap, last_account_number = UpdatedLastAccountNumber},
+            NewState
+    end. 
 
 has_an_account(Accounts, PersonID) ->
     maps:is_key(PersonID, Accounts).
