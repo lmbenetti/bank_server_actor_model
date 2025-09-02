@@ -8,19 +8,20 @@ start(Bankname) ->
 
 start_reg(Bankname) ->
     PID = spawn(?MODULE, init, [Bankname]),
-    register(Bankname, PID).
+    register(Bankname, PID),
+    PID.
 
 %% function that initalizes the state of the bank actor
 init(Bankname) ->
-    State = #bank_state{bank_name = Bankname, accounts = #{}, last_account_number=0},
+    State = #bank_state{bank_name = Bankname, accounts = #{}, last_account_number=1},
     loop(State).
 
 %% function with the behavior of the bank actor upon receiving messages
 loop(State) ->
     receive
-        {new_account, Mobile_app_ID, AccountID} -> 
+        {new_account, Mobile_app_ID, AccountID} -> %To delete
             NewState = new_account_handler(State, Mobile_app_ID, AccountID),
-            loop(NewState); %To delete
+            loop(NewState); 
         {open_account, PersonID} -> 
             NewState = open_account_handler(State,PersonID),
             loop(NewState);
@@ -47,23 +48,22 @@ new_account_handler(State, Mobile_app_ID, AccountID) ->
     NewState.
 
 
-%% Function that creates a new account in the bank's register
+%% Function that creates a new account in the bank's register, linked to a person
 open_account_handler(State, PersonID) ->
     case has_an_account(State#bank_state.accounts,PersonID) of
         true -> 
             io:format("This person already has an account in this bank~n"),
             State;
-        false -> 
-            UpdatedMap = (State#bank_state.accounts)#{PersonID => State#bank_state.last_account_number},
-            UpdatedLastAccountNumber = State#bank_state.last_account_number +1, 
-            NewState = State#bank_state{accounts = UpdatedMap, last_account_number = UpdatedLastAccountNumber},
-            NewState
+        false ->
+            NewAccountName = list_to_atom("account_" ++ integer_to_list(State#bank_state.last_account_number)), 
+            UpdatedLastAccountNumber = State#bank_state.last_account_number +1,
+            NewAccount = account:start_reg(NewAccountName),
+            UpdatedMap = (State#bank_state.accounts)#{PersonID => NewAccount}, 
+            State#bank_state{accounts = UpdatedMap, last_account_number = UpdatedLastAccountNumber}
     end. 
 
 has_an_account(Accounts, PersonID) ->
     maps:is_key(PersonID, Accounts).
-
-
 
 %% Function that handles a transaction, checking if the Mobile App owns the account
 transaction_handler(State, SourceAccount, TargetAccount, Amount, Mobile_app_ID)->

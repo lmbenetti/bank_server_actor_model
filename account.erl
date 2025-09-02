@@ -9,7 +9,8 @@ start() ->
 %% Function that spawns and registers an account actor under the given name
 start_reg(AccountName) ->
     PID = spawn(?MODULE, init, [AccountName]),
-    register(AccountName, PID).
+    register(AccountName, PID),
+    PID.
 
 %% Function that initalizes the state of the account actor
 init(AccountName) ->
