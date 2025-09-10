@@ -18,10 +18,7 @@ init(Bankname) ->
 
 %% function with the behavior of the bank actor upon receiving messages
 loop(State) ->
-    receive
-        {new_account, Mobile_app_ID, AccountID} -> %To delete
-            NewState = new_account_handler(State, Mobile_app_ID, AccountID),
-            loop(NewState); 
+    receive 
         {open_account, PersonID} -> 
             NewState = open_account_handler(State,PersonID),
             loop(NewState);
@@ -31,6 +28,9 @@ loop(State) ->
         {payment_failed, Mobile_app_ID, TargetAccount, Amount} -> 
             payment_failed_handler(State, Mobile_app_ID, TargetAccount, Amount), 
             loop(State);
+        {person_has_account, PersonID, MobileAppID} ->
+            NewState = person_has_account_handler(State, PersonID, MobileAppID),
+            loop(NewState);
         print_accounts ->
                 io:format("The bank has this accounts ~p~n",
                         [State#bank_state.accounts]),
@@ -40,12 +40,6 @@ loop(State) ->
 %% Functiont that send the Mobile App a message, letting it know that a payment has failed.
 payment_failed_handler(State, Mobile_app_ID, TargetAccount, Amount) ->
     Mobile_app_ID ! {payment_failed_balance, TargetAccount, Amount, State#bank_state.bank_name}.
-
-%% Function that creates a new account in the bank's register
-new_account_handler(State, Mobile_app_ID, AccountID) ->
-    UpdatedMap = (State#bank_state.accounts)#{AccountID => Mobile_app_ID},
-    NewState = State#bank_state{accounts = UpdatedMap},
-    NewState.
 
 
 %% Function that creates a new account in the bank's register, linked to a person
@@ -62,6 +56,7 @@ open_account_handler(State, PersonID) ->
             State#bank_state{accounts = UpdatedMap, last_account_number = UpdatedLastAccountNumber}
     end. 
 
+% Function that checks if a person already has an account
 has_an_account(Accounts, PersonID) ->
     maps:is_key(PersonID, Accounts).
 
@@ -80,3 +75,12 @@ transaction_handler(State, SourceAccount, TargetAccount, Amount, Mobile_app_ID)-
                     end
             end.
 
+person_has_account_handler(State, PersonID, MobileAppID) ->
+    case has_an_account(State#bank_state.accounts,PersonID) of
+        true ->
+            MobileAppID ! {account_ownership_positive, State#bank_state.bank_name},
+            State;
+        false ->
+            MobileAppID ! {account_ownership_negative, PersonID, State#bank_state.bank_name},
+            State
+    end.

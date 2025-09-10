@@ -3,17 +3,17 @@
 -record(person_state, {name}).
 
 %% function that spawns a person actor
-start(Name) ->
-    spawn(?MODULE, init, [Name]).
+start(GivenName) ->
+    spawn(?MODULE, init, [GivenName]).
 
-start_reg(PersonName,Name) ->
-    PID = spawn(?MODULE, init, [Name]),
-    register(PersonName, PID),
+start_reg(PersonID,GivenName) ->
+    PID = spawn(?MODULE, init, [GivenName]),
+    register(PersonID, PID),
     PID.
 
 %% function that initalizes the state of the person actor
-init(Name) ->
-    State = #person_state{name = Name},
+init(GivenName) ->
+    State = #person_state{name = GivenName},
     loop(State).
 
 loop(State) ->
