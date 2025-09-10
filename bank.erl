@@ -9,7 +9,7 @@ start(Bankname) ->
 start_reg(Bankname) ->
     PID = spawn(?MODULE, init, [Bankname]),
     register(Bankname, PID),
-    PID.
+    Bankname.
 
 %% function that initalizes the state of the bank actor
 init(Bankname) ->

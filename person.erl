@@ -9,7 +9,7 @@ start(GivenName) ->
 start_reg(PersonID,GivenName) ->
     PID = spawn(?MODULE, init, [GivenName]),
     register(PersonID, PID),
-    PID.
+    PersonID.
 
 %% function that initalizes the state of the person actor
 init(GivenName) ->

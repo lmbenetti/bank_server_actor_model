@@ -9,7 +9,7 @@ start(MoibleAppID) ->
 start_reg(MoibleAppID) ->
     PID = spawn(?MODULE, init, [MoibleAppID]),
     register(MoibleAppID,PID),
-    PID.
+    MoibleAppID.
     
 
 %% function that initalizes the state of the mobile app actor
