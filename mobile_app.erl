@@ -1,5 +1,5 @@
 -module(mobile_app).
--export([start/1, start_reg/1, init/1, handle_n_requests/4]).
+-export([start/1, start_reg/1, init/1]).
 -record(mobile_app_state, {mobile_app_id,person_id, bank_id}).
 
 %% function that spawns a mobile app actor
@@ -24,6 +24,9 @@ loop(State) ->
         % {payment_request, SourceAccount, TargetAccount, Amount} -> 
         %     State#mobile_app_state.bankID ! {transaction, SourceAccount, TargetAccount, Amount, self()},
         % loop(State);
+        {transaction_received_by_server, MobileAppTarget, Amount} ->
+            NewState = transaction_received_by_server_handler(State, MobileAppTarget, Amount),
+            loop(NewState);
         {account_ownership_positive, Bank} ->
             NewState = account_ownership_positive_handler(State, Bank),
             loop(NewState);
@@ -44,25 +47,9 @@ loop(State) ->
         loop(State);
         {payment_failed_amount, TargetAccount, Amount} -> 
             payment_failed_amount_handler(TargetAccount, Amount), 
-        loop(State);
-        % print_balance -> 
-        %     State#mobile_app_state.account !{print_balance_with_owner, State#mobile_app_state.username},
-        % loop(State);
-        {send_N_requests, AccountA1, AccountA2, N} ->
-            handle_n_requests(AccountA1, AccountA2, N, State),
         loop(State)
-        
     end.
 
-%% function that handles N payment requests of 1
-handle_n_requests(AccountA1, AccountA2, N, State) ->
-        case N == 0 of
-            true -> 
-                io:format("Transactions are done!~n");
-            false ->
-                State#mobile_app_state.bank_id ! {transaction, AccountA1, AccountA2, 1, self()},
-                handle_n_requests(AccountA1, AccountA2, (N-1), State)
-        end.
 
 %% function that informs the user that a payment has failed due to insuficient balance
 payment_failed_balance_handler(TargetAccount, Amount, BankID)->
@@ -138,4 +125,9 @@ account_ownership_positive_handler(State, Bank) ->
 account_ownership_negative_handler(State, PersonID, Bank) ->
     io:format("With regards your request, ~p Bank has informed that ~p is does not have an account with them. Please try again.~n",
         [Bank, PersonID]),
+    State.
+
+transaction_received_by_server_handler(State, MobileAppTarget, Amount) ->
+    io:format("The server received your payment request to ~p for $ ~p and will inform you about the result.~n",
+        [MobileAppTarget, Amount]),
     State.

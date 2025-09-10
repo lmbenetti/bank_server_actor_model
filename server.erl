@@ -35,9 +35,9 @@ loop(State) ->
         {add_mobileapp, AccountID, BankID, UserID} ->
             NewState = add_mobile_app(State,AccountID,BankID,UserID),
             loop(NewState);
-        {make_payment, MobileAppSender, AccountIDSender, AccountIDReceiver, Amount} ->
-            make_payment(MobileAppSender, AccountIDSender, AccountIDReceiver, Amount),
-            loop(State);
+        {make_payment, MobileAppSource, MobileAppTarget, Amount} ->
+            NewState = make_payment(State, MobileAppSource, MobileAppTarget, Amount),
+            loop(NewState);
         print_all_balances ->
             print_balances(State),
             loop(State);
@@ -180,12 +180,15 @@ print_balances(State) ->
 
 
 % Function that request payments between mobile apps
-make_payment(MobileAppSender, AccountIDSender, AccountIDReceiver, Amount) ->
+make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
     case Amount < 1 of
         true -> 
-            MobileAppSender ! {payment_failed_amount, AccountIDReceiver, Amount};
+            MobileAppSource ! {payment_failed_amount, MobileAppTarget, Amount},
+            State;
         false ->
-            MobileAppSender ! {payment_request, AccountIDSender, AccountIDReceiver, Amount}
+            MobileAppSource ! {transaction_received_by_server, MobileAppTarget, Amount},
+            %TODO ask for the payment.
+            State
     end.
 
 
