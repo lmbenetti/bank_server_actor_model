@@ -49,7 +49,9 @@ open_account_handler(State, PersonID) ->
             io:format("This person already has an account in this bank~n"),
             State;
         false ->
-            NewAccountName = list_to_atom("account_" ++ integer_to_list(State#bank_state.last_account_number)), 
+            BankNameStr = atom_to_list(State#bank_state.bank_name),
+            AccountNumStr = integer_to_list(State#bank_state.last_account_number),
+            NewAccountName = list_to_atom(BankNameStr ++ "_" ++ AccountNumStr),
             UpdatedLastAccountNumber = State#bank_state.last_account_number +1,
             NewAccount = account:start_reg(NewAccountName),
             UpdatedMap = (State#bank_state.accounts)#{PersonID => NewAccount}, 
