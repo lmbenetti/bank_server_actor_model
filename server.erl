@@ -3,7 +3,7 @@
 -module(server).
 -import(lists,[member/2]).
 -export([start/0, start_reg/1, init/1, loop/1]).
--record(server_state, {server_name, mobile_app_list, people_list, bank_list, started}).
+-record(server_state, {server_name, mobile_app_list, people_list, bank_list, pending_transactions, completed_transactions, started}).
 
 %% Function that spawns an account actor
 start() ->
@@ -17,7 +17,7 @@ start_reg(ServerName) ->
 
 %% Function that initalizes the state of the server actor
 init(ServerName) ->
-    State = #server_state{server_name = ServerName, mobile_app_list = [], people_list = [], bank_list = [], started = false},
+    State = #server_state{server_name = ServerName, mobile_app_list = [], people_list = [], bank_list = [], pending_transactions = #{}, completed_transactions = #{}, started = false},
     loop(State).
 
 %% Function with the behavior of the server actor upon receiving messages
@@ -32,12 +32,13 @@ loop(State) ->
         {add_person, PersonID, PersonName} ->
             NewState = add_person(State, PersonID, PersonName),
             loop(NewState);
-        {add_mobileapp, AccountID, BankID, UserID} ->
-            NewState = add_mobile_app(State,AccountID,BankID,UserID),
+        {add_mobileapp, AccountID, BankID, MobileAppID} ->
+            NewState = add_mobile_app(State,AccountID,BankID,MobileAppID),
             loop(NewState);
         {make_payment, MobileAppSource, MobileAppTarget, Amount} ->
             NewState = make_payment(State, MobileAppSource, MobileAppTarget, Amount),
             loop(NewState);
+        %{app_is_ready, } TODO app is ready to receive or send.
         print_all_balances ->
             print_balances(State),
             loop(State);
@@ -49,8 +50,13 @@ loop(State) ->
             loop(State);
         print_mobileapp_list ->
             print_mobile_app_list(State),
+            loop(State);
+        print_pending_transactions ->
+            print_pending_transactions(State),
+            loop(State);
+        print_completed_transactions ->
+            print_completed_transactions(State),
             loop(State)
-
     end.
 
 %% Function that starts the system with prefilled data
@@ -118,15 +124,15 @@ add_person(State, PersonID, PersonName) ->
     end.
 
 %% Function that adds a mobileapp, if not yet added
-add_mobile_app(State,AccountID,BankID,UserID) ->
-    case member(UserID, State#server_state.mobile_app_list) of
+add_mobile_app(State,AccountID,BankID,MobileAppID) ->
+    case member(MobileAppID, State#server_state.mobile_app_list) of
         true -> 
                 io:format("The user ~p already has an app~n ",
-                        [UserID]),
+                        [MobileAppID]),
                 State;
         false -> 
-                mobile_app:start_reg(AccountID,UserID,BankID),
-                NewCreatedApps = [UserID | State#server_state.mobile_app_list],
+                mobile_app:start_reg(AccountID,MobileAppID,BankID),
+                NewCreatedApps = [MobileAppID | State#server_state.mobile_app_list],
                 NewState = State#server_state{mobile_app_list = NewCreatedApps, started=true},
                 NewState
     end.
@@ -179,6 +185,7 @@ print_balances(State) ->
     end.
 
 
+
 % Function that request payments between mobile apps
 make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
     case Amount < 1 of
@@ -188,8 +195,39 @@ make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
         false ->
             MobileAppSource ! {transaction_received_by_server, MobileAppTarget, Amount},
             %TODO ask for the payment.
+            transaction ! 
+            
+            %TODO. Implement this response once the server receive the confirmation. 
+            % MobileAppTarget ! {successful_incoming_transaction, MobileAppSource, Amount},
             State
     end.
 
 
 
+print_pending_transactions(State) ->
+    Map = State#server_state.pending_transactions,
+    case Map =:= #{} of
+        true ->
+            io:format("There are not transactions pending.~n");
+        false ->
+            io:format("The following transactions are pending.~n"),
+            lists:foreach(
+                fun({K, V}) ->
+                    io:format("~p => ~p~n", [K, V])
+                end,
+                maps:to_list(Map))
+    end.
+
+print_completed_transactions(State) ->
+    Map = State#server_state.completed_transactions,
+    case Map =:= #{} of
+        true ->
+            io:format("There are not transactions completed yet.~n");
+        false ->
+            io:format("The following transactions have been completed.~n"),
+            lists:foreach(
+                fun({K, V}) ->
+                    io:format("~p => ~p~n", [K, V])
+                end,
+      maps:to_list(Map))
+    end.
