@@ -27,8 +27,8 @@ loop(State) ->
         {successful_incoming_transaction, MoibleAppSource, Amount} ->
             NewState = successful_incoming_transaction_handler(State, MoibleAppSource, Amount),
             loop(NewState);
-        {transaction_received_by_server, MobileAppTarget, Amount} ->
-            NewState = transaction_received_by_server_handler(State, MobileAppTarget, Amount),
+        {transaction_received_by_server, MobileAppTarget, Amount, Server, TransactionNumber} ->
+            NewState = transaction_received_by_server_handler(State, MobileAppTarget, Amount, Server,TransactionNumber),
             loop(NewState);
         {account_ownership_positive, Bank} ->
             NewState = account_ownership_positive_handler(State, Bank),
@@ -130,23 +130,16 @@ account_ownership_negative_handler(State, PersonID, Bank) ->
         [Bank, PersonID]),
     State.
 
-transaction_received_by_server_handler(State, MobileAppTarget, Amount) ->
-    io:format("The server received your payment request to ~p for $ ~p and will inform you about the result.~n",
-        [MobileAppTarget, Amount]),
+transaction_received_by_server_handler(State, MobileAppTarget, Amount, Server, TransactionNumber) ->
+    io:format("The server received your payment request to ~p for $ ~p and assigned the transaction number ~p. The server will inform you about the result.~n",
+        [MobileAppTarget, Amount, TransactionNumber]),
+    Server ! {app_verification, State#mobile_app_state.mobile_app_id, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
     State.
 
 successful_incoming_transaction_handler(State, MobileAppSource, Amount) ->
     io:format("You have received a transaction from ~p for $ ~p.~n",
         [MobileAppSource, Amount]),
     State.
-
-% app_is_complete_handler(State) ->
-%     case app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id) of
-%         true ->
-
-
-%         false ->
-%     end.
 
 
 
