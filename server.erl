@@ -38,8 +38,8 @@ loop(State) ->
         {make_payment, MobileAppSource, MobileAppTarget, Amount} ->
             NewState = make_payment(State, MobileAppSource, MobileAppTarget, Amount),
             loop(NewState);
-        {app_verification, MobileAppID, TransactionNumber, Verified} ->
-            NewState = app_verification_handler(MobileAppID, TransactionNumber, Verified),
+        {app_verification, MobileAppID, Role, TransactionNumber, Verified} ->
+            NewState = app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified),
             loop(NewState);
         print_all_balances ->
             print_balances(State),
@@ -214,7 +214,8 @@ make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
                 pending_to_verify_transactions = UpdatedPendingTransactions,
                 last_transaction_number = NewTransactionNumber
                 },
-            MobileAppSource ! {transaction_received_by_server, MobileAppTarget, Amount, State#server_state.server_name, NewTransactionNumber},
+            MobileAppSource ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 0, Amount, State#server_state.server_name, NewTransactionNumber},
+            MobileAppTarget ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 1, Amount, State#server_state.server_name, NewTransactionNumber},
             NewState
     end.
 
@@ -259,4 +260,21 @@ print_completed_transactions(State) ->
                 end,
       maps:to_list(Map))
     end.
+
+app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) ->
+    Pending = State#server_state.pending_to_verify_transactions,
+    case is_key(TransactionNumber, Pending) of
+        false ->
+            io:format("Error: Mobile app ~p sent a verification response for the Transaction Number ~p but this transaction was not pending.~n",
+        [MobileAppID, TransactionNumber]),
+        State;
+        true -> 
+            Transaction = get(TransactionNumber, Pending),
+            case get(source, Transaction) =:= MobileAppID of
+                true ->
+                    source_approved =>
+
+                    
+    
+
 

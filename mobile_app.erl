@@ -27,8 +27,14 @@ loop(State) ->
         {successful_incoming_transaction, MoibleAppSource, Amount} ->
             NewState = successful_incoming_transaction_handler(State, MoibleAppSource, Amount),
             loop(NewState);
-        {transaction_received_by_server, MobileAppTarget, Amount, Server, TransactionNumber} ->
-            NewState = transaction_received_by_server_handler(State, MobileAppTarget, Amount, Server,TransactionNumber),
+        {transaction_received_by_server, MobileAppSource, MobileAppTarget, Role, Amount, Server, TransactionNumber} ->
+            NewState = transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount, Server,TransactionNumber),
+            loop(NewState);
+        {payment_failed_source, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed} ->
+            NewState = payment_failed_source_handler(State, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed),
+            loop(NewState);
+        {payment_failed_target, MobileAppSource, TransactionNumber, Amount, RoleThatFailed} ->
+            NewState = payment_failed_target_handler(State, MobileAppSource, TransactionNumber, Amount, RoleThatFailed),
             loop(NewState);
         {account_ownership_positive, Bank} ->
             NewState = account_ownership_positive_handler(State, Bank),
@@ -130,16 +136,48 @@ account_ownership_negative_handler(State, PersonID, Bank) ->
         [Bank, PersonID]),
     State.
 
-transaction_received_by_server_handler(State, MobileAppTarget, Amount, Server, TransactionNumber) ->
-    io:format("The server received your payment request to ~p for $ ~p and assigned the transaction number ~p. The server will inform you about the result.~n",
-        [MobileAppTarget, Amount, TransactionNumber]),
-    Server ! {app_verification, State#mobile_app_state.mobile_app_id, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
-    State.
+transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount, Server, TransactionNumber) ->
+    case Role == 0 of
+        true ->  
+            io:format("The server received your payment request to ~p for $ ~p and assigned the transaction number ~p. The server will inform you about the result.~n",
+            [MobileAppTarget, Amount, TransactionNumber]),
+            Server ! {app_verification, State#mobile_app_state.mobile_app_id, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
+            State;
+        false ->
+            io:format("~p has initiated a payment to you for $ ~p under transaction number ~p. The server will inform you about the result.~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            Server ! {app_verification, State#mobile_app_state.mobile_app_id, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
+            State
+    end.
 
 successful_incoming_transaction_handler(State, MobileAppSource, Amount) ->
     io:format("You have received a transaction from ~p for $ ~p.~n",
         [MobileAppSource, Amount]),
     State.
+payment_failed_source_handler(State, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed) ->
+    case RoleThatFailed == 0 of
+        true ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because your App is not linked to a person or a bank. Complete your App registration and try again. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]),
+            State;
+        false ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because the recipient App is not linked to a person or a bank. Contact them to solve this issue and try again. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]),
+            State
+    end. 
+
+payment_failed_target_handler(State, MobileAppSource, TransactionNumber, Amount, RoleThatFailed) ->
+    case RoleThatFailed == 1 of
+        true ->
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because your App is not linked to a person or a bank. Complete your app registration and try again. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State;
+        false -> 
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because their App is not linked to a person or a bank. Contact them to solve this issue and try again. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State
+    end.
+
 
 
 
