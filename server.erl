@@ -263,18 +263,33 @@ print_completed_transactions(State) ->
 
 app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) ->
     Pending = State#server_state.pending_to_verify_transactions,
-    case is_key(TransactionNumber, Pending) of
+    case maps:is_key(TransactionNumber, Pending) of
         false ->
             io:format("Error: Mobile app ~p sent a verification response for the Transaction Number ~p but this transaction was not pending.~n",
         [MobileAppID, TransactionNumber]),
         State;
-        true -> 
-            Transaction = get(TransactionNumber, Pending),
-            case get(source, Transaction) =:= MobileAppID of
+        true ->
+            Transaction = maps:get(TransactionNumber, Pending),
+            MobileAppSource = maps:get(source, Transaction), 
+            MobileAppTarget = maps:get(target, Transaction),
+            Amount = maps:get(amount, Transaction),
+            case Verified of
+                false ->
+                    MobileAppSource ! {payment_failed_source, MobileAppTarget, TransactionNumber, Amount, Role},
+                    MobileAppTarget ! {payment_failed_target, MobileAppTarget, TransactionNumber, Amount, Role},
+                    State;
                 true ->
-                    source_approved =>
-
+                    UpdatedTransaction = update_transaction(Transaction, Role)
                     
-    
+            end
+    end.
+
+update_transaction(Transaction, Role) ->
+    case Role == 0 of
+        true ->
+            Transaction#{source := true};
+        false ->
+            Transaction#{target := true}
+    end.
 
 

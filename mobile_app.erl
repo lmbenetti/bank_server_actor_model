@@ -141,12 +141,12 @@ transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, 
         true ->  
             io:format("The server received your payment request to ~p for $ ~p and assigned the transaction number ~p. The server will inform you about the result.~n",
             [MobileAppTarget, Amount, TransactionNumber]),
-            Server ! {app_verification, State#mobile_app_state.mobile_app_id, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
+            Server ! {app_verification, State#mobile_app_state.mobile_app_id ,Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
             State;
         false ->
             io:format("~p has initiated a payment to you for $ ~p under transaction number ~p. The server will inform you about the result.~n",
             [MobileAppSource, Amount, TransactionNumber]),
-            Server ! {app_verification, State#mobile_app_state.mobile_app_id, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
+            Server ! {app_verification, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
             State
     end.
 
