@@ -202,8 +202,8 @@ make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
             Transaction = #{
                 source => MobileAppSource,
                 target => MobileAppTarget,
-                source_approved => false,
-                target_approved => false,
+                source_verified => false,
+                target_verified => false,
                 apps_verified => false,
                 successful => false,
                 amount => Amount
@@ -258,7 +258,7 @@ print_completed_transactions(State) ->
                 fun({K, V}) ->
                     io:format("~p => ~p~n", [K, V])
                 end,
-      maps:to_list(Map))
+                maps:to_list(Map))
     end.
 
 app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) ->
@@ -279,16 +279,35 @@ app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) 
                     MobileAppTarget ! {payment_failed_target, MobileAppTarget, TransactionNumber, Amount, Role},
                     State;
                 true ->
-                    UpdatedTransaction = update_transaction(Transaction, Role)
+                    UpdatedTransaction = update_transaction(Transaction, Role),
+                    case maps:get(apps_verified,UpdatedTransaction) of
+                        false ->
+                            UpdatedPendingTransactions = Pending#{TransactionNumber := UpdatedTransaction},
+                            NewState = State#server_state{pending_to_verify_transactions = UpdatedPendingTransactions},
+                            NewState;
+                        true ->
+                            io:format("Transaction on it's way")
+                    end
                     
             end
     end.
 
 update_transaction(Transaction, Role) ->
-    case Role == 0 of
+    UpdatedRoleTransaction = update_one_role(Transaction, Role),
+    SourceVerified = maps:get(source_verified, Transaction),
+    TargetVerified = maps:get(target_verified, Transaction),
+    case (SourceVerified and TargetVerified) of
         true ->
-            Transaction#{source := true};
+            UpdatedRoleTransaction#{apps_verified := true};
         false ->
+            UpdatedRoleTransaction
+    end.
+
+update_one_role(Transaction, Role) ->
+    case Role of
+        0 ->
+            Transaction#{source := true};
+        1 ->
             Transaction#{target := true}
     end.
 
