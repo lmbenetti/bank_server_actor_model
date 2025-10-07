@@ -3,18 +3,20 @@
 -record(mobile_app_state, {mobile_app_id,person_id, bank_id}).
 
 %% function that spawns a mobile app actor
-start(MoibleAppID) ->
-    spawn(?MODULE, init, [MoibleAppID]).
+start(MobileAppID) ->
+    PID = spawn(?MODULE, init, [MobileAppID]),
+    server ! {new_mobile_app, MobileAppID},
+    PID.
 
-start_reg(MoibleAppID) ->
-    PID = spawn(?MODULE, init, [MoibleAppID]),
-    register(MoibleAppID,PID),
-    MoibleAppID.
+start_reg(MobileAppID) ->
+    PID = start(MobileAppID),
+    register(MobileAppID,PID),
+    MobileAppID.
     
 
 %% function that initalizes the state of the mobile app actor
-init(MoibleAppID) ->
-    State = #mobile_app_state{mobile_app_id = MoibleAppID, person_id = undefined, bank_id = undefined},
+init(MobileAppID) ->
+    State = #mobile_app_state{mobile_app_id = MobileAppID, person_id = undefined, bank_id = undefined},
     loop(State).
 
 
@@ -93,6 +95,7 @@ add_person_handler(State, PersonID) ->
             io:format("This app is already assigned to a person.~n"),
             State;
         false ->
+            server ! {person_added_to_app, State#mobile_app_state.mobile_app_id , PersonID},
             State#mobile_app_state{person_id = PersonID}
     end.
 
@@ -128,6 +131,7 @@ print_bank_name(Bank) ->
 account_ownership_positive_handler(State, Bank) ->
     io:format("With regards your request, ~p Bank has confirmed that you hold an account with them and now this app is connected with that account.~n",
         [Bank]),
+    server ! {bank_added_to_app, State#mobile_app_state.mobile_app_id, Bank},
     State#mobile_app_state{bank_id = Bank}.
 
 

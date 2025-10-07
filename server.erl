@@ -17,7 +17,7 @@ start_reg(ServerName) ->
 
 %% Function that initalizes the state of the server actor
 init(ServerName) ->
-    State = #server_state{server_name = ServerName, mobile_app_list = [], people_list = [], bank_list = [], pending_to_verify_transactions = #{}, sent_to_bank_transactions =#{}, completed_transactions = #{}, failed_transactions = #{}, last_transaction_number=0, started = false},
+    State = #server_state{server_name = ServerName, mobile_app_list = #{}, people_list = [], bank_list = [], pending_to_verify_transactions = #{}, sent_to_bank_transactions =#{}, completed_transactions = #{}, failed_transactions = #{}, last_transaction_number=0, started = false},
     loop(State).
 
 %% Function with the behavior of the server actor upon receiving messages
@@ -41,9 +41,15 @@ loop(State) ->
         {app_verification, MobileAppID, Role, TransactionNumber, Verified} ->
             NewState = app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified),
             loop(NewState);
-        print_all_balances ->
-            print_balances(State),
-            loop(State);
+        {new_mobile_app, MobileAppID} ->
+            NewState = new_mobile_app_handler(State, MobileAppID),
+            loop(NewState);
+        {person_added_to_app, MobileAppID, PersonID} ->
+            NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
+            loop(NewState);
+        {bank_added_to_app, MobileAppID, BankName} ->
+            NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
+            loop(NewState);
         print_banks_list ->
             print_bank_list(State),
             loop(State);
@@ -97,7 +103,6 @@ start_model(State) ->
                 lunar ! {open_account, olivia}, app6 ! {add_person, olivia}, app6 ! {add_bank, lunar},
                 lunar ! {open_account, noah}, app7 ! {add_person, noah}, app7 ! {add_bank, lunar},
                 NewState = State#server_state{
-                                            mobile_app_list = Apps,
                                             people_list = PersonIDs,
                                             bank_list=Banks, 
                                             started=true},
@@ -133,7 +138,7 @@ add_person(State, PersonID, PersonName) ->
 
 %% Function that adds a mobileapp, if not yet added
 add_mobile_app(State,AccountID,BankID,MobileAppID) ->
-    case member(MobileAppID, State#server_state.mobile_app_list) of
+    case member(MobileAppID, State#server_state.mobile_app_list) of %TODO now is a map
         true -> 
                 io:format("The user ~p already has an app~n ",
                         [MobileAppID]),
@@ -170,29 +175,14 @@ print_people_list(State) ->
     end.
 
 %% Function that prints the list of mobile apps registered in the server
-print_mobile_app_list(State)->
-    case State#server_state.mobile_app_list == [] of
+print_mobile_app_list(State)-> 
+    case State#server_state.mobile_app_list == #{} of
         true -> 
                 io:format("The server has no mobile apps registered~n");
         false ->
-                io:format("The server has the following mobile apps:~n"),
-                lists:foreach(fun(MobileAPP) ->
-                io:format(" - ~p~n", [MobileAPP])
-                end, State#server_state.mobile_app_list)
+                io:format("The server has the following mobile apps: ~p~n",
+                    [State#server_state.mobile_app_list])
     end.
-
-%% Function that prints the balance of all the mobile apps in the server
-print_balances(State) ->
-    case State#server_state.mobile_app_list == [] of
-        true -> 
-                io:format("The server has no mobile apps registered~n");
-        false ->
-                lists:foreach(fun(MobileAPP) ->
-                MobileAPP ! print_balance
-                end, State#server_state.mobile_app_list)
-    end.
-
-
 
 % Function that request payments between mobile apps
 make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
@@ -333,6 +323,29 @@ update_one_role(Transaction, Role) ->
         1 ->
             Transaction#{target_verified := true}
     end.
+
+
+new_mobile_app_handler(State, MobileAppID) ->
+    MobileAppList = State#server_state.mobile_app_list,
+    case maps:is_key(MobileAppID, MobileAppList) of
+        true ->
+            io:format("Error. App ~p is already registered in the server ~n", [MobileAppID]),
+            State;
+        false -> 
+            NewMobileApp = #{
+                person => false,
+                bank => false,
+                verified => false
+            },
+            UpdatedMobileAppList = MobileAppList#{MobileAppID => NewMobileApp},
+            NewState = State#server_state{mobile_app_list = UpdatedMobileAppList},
+            loop(NewState)
+    end.
+
+% person_added_to_app_handler(State, MobileAppID, PersonID) ->
+
+% bank_added_to_app_handler(State, MobileAppID, BankName) ->
+
 
 % TODO 
 % The sever does not have a match of apps>people>bank>account. It should have a mobile app map that maps
