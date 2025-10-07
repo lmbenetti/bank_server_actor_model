@@ -2,12 +2,12 @@
 
 -module(server).
 -import(lists,[member/2]).
--export([start/0, start_reg/1, init/1, loop/1]).
--record(server_state, {server_name, mobile_app_list, people_list, bank_list, pending_to_verify_transactions, sent_to_bank_transactions, completed_transactions,last_transaction_number, started}).
+-export([start/1, start_reg/1, init/1, loop/1]).
+-record(server_state, {server_name, mobile_app_list, people_list, bank_list, pending_to_verify_transactions, sent_to_bank_transactions, completed_transactions, failed_transactions, last_transaction_number, started}).
 
 %% Function that spawns an account actor
-start() ->
-    spawn(?MODULE, init, []).
+start(ServerName) ->
+    spawn(?MODULE, init, [ServerName]).
 
 %% Function that spawns and registers an account actor under the given name
 start_reg(ServerName) ->
@@ -17,7 +17,7 @@ start_reg(ServerName) ->
 
 %% Function that initalizes the state of the server actor
 init(ServerName) ->
-    State = #server_state{server_name = ServerName, mobile_app_list = [], people_list = [], bank_list = [], pending_to_verify_transactions = #{}, sent_to_bank_transactions =#{}, completed_transactions = #{}, last_transaction_number=0, started = false},
+    State = #server_state{server_name = ServerName, mobile_app_list = [], people_list = [], bank_list = [], pending_to_verify_transactions = #{}, sent_to_bank_transactions =#{}, completed_transactions = #{}, failed_transactions = #{}, last_transaction_number=0, started = false},
     loop(State).
 
 %% Function with the behavior of the server actor upon receiving messages
@@ -58,6 +58,9 @@ loop(State) ->
             loop(State);
         print_sent_to_bank_transactions ->
             print_sent_to_bank_transactions(State),
+            loop(State);
+        print_failed_transactions ->
+            print_failed_transactions(State),
             loop(State);
         print_completed_transactions ->
             print_completed_transactions(State),
@@ -247,6 +250,20 @@ print_sent_to_bank_transactions(State) ->
                 maps:to_list(Map))
     end.
 
+print_failed_transactions(State) ->
+    Map = State#server_state.failed_transactions,
+    case Map =:= #{} of
+        true ->
+            io:format("There are not failed transactions.~n");
+        false ->
+            io:format("The following transactions have failed.~n"),
+            lists:foreach(
+                fun({K, V}) ->
+                    io:format("~p => ~p~n", [K, V])
+                end,
+                maps:to_list(Map))
+    end.
+
 print_completed_transactions(State) ->
     Map = State#server_state.completed_transactions,
     case Map =:= #{} of
@@ -277,7 +294,12 @@ app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) 
                 false ->
                     MobileAppSource ! {payment_failed_source, MobileAppTarget, TransactionNumber, Amount, Role},
                     MobileAppTarget ! {payment_failed_target, MobileAppTarget, TransactionNumber, Amount, Role},
-                    State;
+                    Failed = State#server_state.failed_transactions,
+                    NewPenging = maps:remove(TransactionNumber, Pending),
+                    NewFailed = Failed#{TransactionNumber =>Transaction},
+                    NewState = State#server_state{pending_to_verify_transactions = NewPenging,
+                        failed_transactions = NewFailed},
+                    NewState;
                 true ->
                     UpdatedTransaction = update_transaction(Transaction, Role),
                     case maps:get(apps_verified,UpdatedTransaction) of
@@ -287,6 +309,7 @@ app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) 
                             NewState;
                         true ->
                             io:format("Transaction on it's way")
+                            
                     end
                     
             end
@@ -294,8 +317,8 @@ app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) 
 
 update_transaction(Transaction, Role) ->
     UpdatedRoleTransaction = update_one_role(Transaction, Role),
-    SourceVerified = maps:get(source_verified, Transaction),
-    TargetVerified = maps:get(target_verified, Transaction),
+    SourceVerified = maps:get(source_verified, UpdatedRoleTransaction),
+    TargetVerified = maps:get(target_verified, UpdatedRoleTransaction),
     case (SourceVerified and TargetVerified) of
         true ->
             UpdatedRoleTransaction#{apps_verified := true};
@@ -306,9 +329,12 @@ update_transaction(Transaction, Role) ->
 update_one_role(Transaction, Role) ->
     case Role of
         0 ->
-            Transaction#{source := true};
+            Transaction#{source_verified := true};
         1 ->
-            Transaction#{target := true}
+            Transaction#{target_verified := true}
     end.
 
-
+% TODO 
+% The sever does not have a match of apps>people>bank>account. It should have a mobile app map that maps
+% the apps and names and banks. The mobile app should notifiy the server every time is created and when it's
+% linked  

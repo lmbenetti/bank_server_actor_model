@@ -1,10 +1,10 @@
 -module(account).
--export([start/0, start_reg/1, init/1]).
+-export([start/1, start_reg/1, init/1]).
 -record(account_state, {accountname, balance}).
 
 %% Function that spawns an account actor
-start() ->
-    spawn(?MODULE, init, []).
+start(AccountName) ->
+    spawn(?MODULE, init, [AccountName]).
 
 %% Function that spawns and registers an account actor under the given name
 start_reg(AccountName) ->
