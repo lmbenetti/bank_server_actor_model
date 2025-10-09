@@ -32,9 +32,6 @@ loop(State) ->
         {add_person, PersonID, PersonName} ->
             NewState = add_person(State, PersonID, PersonName),
             loop(NewState);
-        {add_mobileapp, AccountID, BankID, MobileAppID} ->
-            NewState = add_mobile_app(State,AccountID,BankID,MobileAppID),
-            loop(NewState);
         {make_payment, MobileAppSource, MobileAppTarget, Amount} ->
             NewState = make_payment(State, MobileAppSource, MobileAppTarget, Amount),
             loop(NewState);
@@ -44,12 +41,12 @@ loop(State) ->
         {new_mobile_app, MobileAppID} ->
             NewState = new_mobile_app_handler(State, MobileAppID),
             loop(NewState);
-        {person_added_to_app, MobileAppID, PersonID} ->
-            NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
-            loop(NewState);
-        {bank_added_to_app, MobileAppID, BankName} ->
-            NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
-            loop(NewState);
+        % {person_added_to_app, MobileAppID, PersonID} ->
+        %     NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
+        %     loop(NewState);
+        % {bank_added_to_app, MobileAppID, BankName} ->
+        %     NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
+        %     loop(NewState);
         print_banks_list ->
             print_bank_list(State),
             loop(State);
@@ -342,7 +339,16 @@ new_mobile_app_handler(State, MobileAppID) ->
             loop(NewState)
     end.
 
-% person_added_to_app_handler(State, MobileAppID, PersonID) ->
+person_added_to_app_handler(State, MobileAppID, PersonID) ->
+    MobileAppList = State#server_state.mobile_app_list,
+    RegisteredMobileApp = maps:is_key(MobileAppID,MobileAppList,"App not registered"),
+    case RegisteredMobileApp of
+        "App not registered" ->
+            MobileAppID ! {app_not_registered_in_server, PersonID},
+            State;
+        _ ->
+            case 
+    end.
 
 % bank_added_to_app_handler(State, MobileAppID, BankName) ->
 

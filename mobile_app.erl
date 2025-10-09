@@ -50,6 +50,7 @@ loop(State) ->
         {add_person, PersonID}->
             NewState = add_person_handler(State, PersonID),
             loop(NewState);
+        % {app_not_registered_in_server, PersonID} -> TODO
         print ->
             NewState = print_handler(State),
             loop(NewState);
