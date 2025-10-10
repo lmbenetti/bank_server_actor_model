@@ -41,12 +41,12 @@ loop(State) ->
         {new_mobile_app, MobileAppID} ->
             NewState = new_mobile_app_handler(State, MobileAppID),
             loop(NewState);
-        % {person_added_to_app, MobileAppID, PersonID} ->
-        %     NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
-        %     loop(NewState);
-        % {bank_added_to_app, MobileAppID, BankName} ->
-        %     NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
-        %     loop(NewState);
+        {person_added_to_app, MobileAppID, PersonID} ->
+            NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
+            loop(NewState);
+        {bank_added_to_app, MobileAppID, BankName} ->
+            NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
+            loop(NewState);
         print_banks_list ->
             print_bank_list(State),
             loop(State);
@@ -131,20 +131,6 @@ add_person(State, PersonID, PersonName) ->
             person:start_reg(PersonID, PersonName),
             NewPersonList = [PersonID | State#server_state.people_list],
             State#server_state{people_list = NewPersonList}
-    end.
-
-%% Function that adds a mobileapp, if not yet added
-add_mobile_app(State,AccountID,BankID,MobileAppID) ->
-    case member(MobileAppID, State#server_state.mobile_app_list) of %TODO now is a map
-        true -> 
-                io:format("The user ~p already has an app~n ",
-                        [MobileAppID]),
-                State;
-        false -> 
-                mobile_app:start_reg(AccountID,MobileAppID,BankID),
-                NewCreatedApps = [MobileAppID | State#server_state.mobile_app_list],
-                NewState = State#server_state{mobile_app_list = NewCreatedApps, started=true},
-                NewState
     end.
 
 %% Function that prints the list of banks registered in the server
@@ -330,8 +316,8 @@ new_mobile_app_handler(State, MobileAppID) ->
             State;
         false -> 
             NewMobileApp = #{
-                person => false,
-                bank => false,
+                person => undefined,
+                bank => undefined,
                 verified => false
             },
             UpdatedMobileAppList = MobileAppList#{MobileAppID => NewMobileApp},
@@ -341,19 +327,50 @@ new_mobile_app_handler(State, MobileAppID) ->
 
 person_added_to_app_handler(State, MobileAppID, PersonID) ->
     MobileAppList = State#server_state.mobile_app_list,
-    RegisteredMobileApp = maps:is_key(MobileAppID,MobileAppList,"App not registered"),
+    RegisteredMobileApp = maps:get(MobileAppID,MobileAppList, undefined),
     case RegisteredMobileApp of
-        "App not registered" ->
+        undefined ->
             MobileAppID ! {app_not_registered_in_server, PersonID},
             State;
         _ ->
-            case 
+            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp,PersonID,"Person"),
+            UpdatedMobileAppList = MobileAppList#{MobileAppID => UpdatedMobileApp},
+            State#server_state{mobile_app_list = UpdatedMobileAppList}
     end.
 
-% bank_added_to_app_handler(State, MobileAppID, BankName) ->
+mobile_app_update(MobileApp,DataToUpdate,TypeOfData) ->
+    case TypeOfData of 
+        "Bank" ->
+            UpdateMobileApp = MobileApp#{bank => DataToUpdate},
+            mobile_app_verified_updater(UpdateMobileApp);
+        "Person" ->
+            UpdateMobileApp = MobileApp#{person => DataToUpdate},
+            mobile_app_verified_updater(UpdateMobileApp)
+    end.
+
+mobile_app_verified_updater(MobileApp) ->
+    Bank   = maps:get(bank, MobileApp),
+    Person = maps:get(person, MobileApp),
+    case (Bank == undefined orelse Person == undefined) of
+        true ->
+            MobileApp;
+        false ->
+            MobileApp#{verified => true}
+    end.
 
 
-% TODO 
-% The sever does not have a match of apps>people>bank>account. It should have a mobile app map that maps
-% the apps and names and banks. The mobile app should notifiy the server every time is created and when it's
-% linked  
+bank_added_to_app_handler(State, MobileAppID, BankName) ->
+    MobileAppList = State#server_state.mobile_app_list,
+    RegisteredMobileApp = maps:get(MobileAppID,MobileAppList, undefined),
+    case RegisteredMobileApp of
+        undefined ->
+            MobileAppID ! {app_not_registered_in_server, BankName},
+            State;
+        _ ->
+            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp,BankName,"Bank"),
+            UpdatedMobileAppList = MobileAppList#{MobileAppID => UpdatedMobileApp},
+            State#server_state{mobile_app_list = UpdatedMobileAppList}
+    end.
+
+% TODO Adding a person and a bank to a Mobile app should be done trough a request TO the server
+% Right now is a request to the app, but the server should handle it instead as a request. 

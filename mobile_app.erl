@@ -50,7 +50,9 @@ loop(State) ->
         {add_person, PersonID}->
             NewState = add_person_handler(State, PersonID),
             loop(NewState);
-        % {app_not_registered_in_server, PersonID} -> TODO
+        {app_not_registered_in_server, PersonID} ->
+            app_not_registered_in_server_handler(PersonID),
+            loop(State);
         print ->
             NewState = print_handler(State),
             loop(NewState);
@@ -182,6 +184,9 @@ payment_failed_target_handler(State, MobileAppSource, TransactionNumber, Amount,
             [MobileAppSource, Amount, TransactionNumber]),
             State
     end.
+
+app_not_registered_in_server_handler(PersonID) ->
+    io:format("The registration of ~p failed because the App is still not registered in the server. Try again in 5 minutres", [PersonID]).
 
 
 
