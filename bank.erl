@@ -67,6 +67,10 @@ get_account_number(Accounts, PersonID) ->
 
 %% Function that handles a transaction, checking if the Mobile App owns the account
 transaction_handler(State, SourceAccount, TargetAccount, Amount, Mobile_app_ID)->
+    io:format("The bank is checking if the Source account: ~p is registered in the Bank~p ~n",[SourceAccount, State#bank_state.bank_name]),
+    io:format("To do that I will check if the Source account: ~p is a key in this list ~p ~n",[SourceAccount, State#bank_state.accounts]),
+
+%TODO. Here the bank checks the key, that is a person, not an account.
     case maps:is_key(SourceAccount, State#bank_state.accounts) of
                 false  -> 
                     io:format("The sender account is not registered in ~p Bank~n", [State#bank_state.bank_name]);
