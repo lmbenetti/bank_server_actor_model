@@ -29,8 +29,8 @@ loop(State) ->
         {successful_incoming_transaction, MoibleAppSource, Amount} ->
             NewState = successful_incoming_transaction_handler(State, MoibleAppSource, Amount),
             loop(NewState);
-        {transaction_received_by_server, MobileAppSource, MobileAppTarget, Role, Amount, Server, TransactionNumber} ->
-            NewState = transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount, Server,TransactionNumber),
+        {transaction_received_by_server, MobileAppSource, MobileAppTarget, Role, Amount, TransactionNumber} ->
+            NewState = transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount,TransactionNumber),
             loop(NewState);
         {payment_failed_source, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed} ->
             NewState = payment_failed_source_handler(State, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed),
@@ -38,8 +38,20 @@ loop(State) ->
         {payment_failed_target, MobileAppSource, TransactionNumber, Amount, RoleThatFailed} ->
             NewState = payment_failed_target_handler(State, MobileAppSource, TransactionNumber, Amount, RoleThatFailed),
             loop(NewState);
-        {account_ownership_positive, Bank} ->
-            NewState = account_ownership_positive_handler(State, Bank),
+        {payment_failed_both, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole} ->
+            NewState = payment_failed_both_handler(State, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole),
+            loop(NewState);
+        {payment_failed_non_registered_source, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed} ->
+            NewState = payment_failed_non_registered_source_handler(State, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed),
+            loop(NewState);
+        {payment_failed_non_registered_target, MobileAppSource, TransactionNumber, Amount, RoleThatFailed} -> 
+            NewState = payment_failed_non_registered_target_handler(State, MobileAppSource, TransactionNumber, Amount, RoleThatFailed),
+            loop(NewState);
+        {payment_failed_non_registered_both, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole} -> 
+            NewState = payment_failed_non_registered_both_handler(State, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole),
+            loop(NewState);
+        {account_ownership_positive, Bank, AccountNumber} ->
+            NewState = account_ownership_positive_handler(State, Bank, AccountNumber),
             loop(NewState);
         {account_ownership_negative, PersonID, Bank} ->
             NewState = account_ownership_negative_handler(State, PersonID, Bank),
@@ -131,10 +143,10 @@ print_bank_name(Bank) ->
     io:format("This Mobile App is connected to ~p Bank.~n",
         [Bank]).
 
-account_ownership_positive_handler(State, Bank) ->
+account_ownership_positive_handler(State, Bank, AccountNumber) ->
     io:format("With regards your request, ~p Bank has confirmed that you hold an account with them and now this app is connected with that account.~n",
         [Bank]),
-    server ! {bank_added_to_app, State#mobile_app_state.mobile_app_id, Bank},
+    server ! {bank_added_to_app, State#mobile_app_state.mobile_app_id, Bank, AccountNumber},
     State#mobile_app_state{bank_id = Bank}.
 
 
@@ -143,17 +155,15 @@ account_ownership_negative_handler(State, PersonID, Bank) ->
         [Bank, PersonID]),
     State.
 
-transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount, Server, TransactionNumber) ->
+transaction_received_by_server_handler(State, MobileAppSource, MobileAppTarget, Role, Amount, TransactionNumber) ->
     case Role of
         0 ->  
             io:format("The server received your payment request to ~p for $ ~p and assigned the transaction number ~p. The server will inform you about the result.~n",
             [MobileAppTarget, Amount, TransactionNumber]),
-            Server ! {app_verification, State#mobile_app_state.mobile_app_id ,Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
             State;
         1 ->
             io:format("~p has initiated a payment to you for $ ~p under transaction number ~p. The server will inform you about the result.~n",
             [MobileAppSource, Amount, TransactionNumber]),
-            Server ! {app_verification, State#mobile_app_state.mobile_app_id, Role, TransactionNumber, (app_has_person(State#mobile_app_state.person_id) and app_has_bank(State#mobile_app_state.bank_id))},
             State
     end.
 
@@ -188,6 +198,48 @@ payment_failed_target_handler(State, MobileAppSource, TransactionNumber, Amount,
 app_not_registered_in_server_handler(PersonID) ->
     io:format("The registration of ~p failed because the App is still not registered in the server. Try again in 5 minutres", [PersonID]).
 
+payment_failed_both_handler(State, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole) ->
+    case YourRole of
+        "Source" ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because your App and their App are not linked to a person or a bank. Solve this issue and try again. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]);
+        "Target" ->
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because your App and their App are not linked to a person or a bank. Solve this issue and try again. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State
+    end.
 
+payment_failed_non_registered_source_handler(State, MobileAppTarget, TransactionNumber, Amount, RoleThatFailed) ->
+    case RoleThatFailed of
+        0 ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because your App is not registered in the server. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]),
+            State;
+        1 ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because the recipient App is not registered in the server. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]),
+            State
+    end. 
 
+payment_failed_non_registered_target_handler(State, MobileAppSource, TransactionNumber, Amount, RoleThatFailed) ->
+        case RoleThatFailed of
+        1 ->
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because your App is not registered in the server. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State;
+        0 -> 
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because their is not registered in the server. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State
+    end.
 
+payment_failed_non_registered_both_handler(State, MobileAppSource, MobileAppTarget, TransactionNumber, Amount, YourRole) ->
+    case YourRole of
+        "Source" ->
+            io:format("Your transaction to ~p for $ ~p under number ~p, has failed because your App and their App are not registered in the Server. ~n",
+            [MobileAppTarget, Amount, TransactionNumber]);
+        "Target" ->
+            io:format("The incoming transaction from ~p for $ ~p under number ~p, has failed because your App and their App are not registered in the Server. ~n",
+            [MobileAppSource, Amount, TransactionNumber]),
+            State
+    end.

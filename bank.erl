@@ -62,6 +62,9 @@ open_account_handler(State, PersonID) ->
 has_an_account(Accounts, PersonID) ->
     maps:is_key(PersonID, Accounts).
 
+get_account_number(Accounts, PersonID) ->
+    maps:get(PersonID, Accounts).
+
 %% Function that handles a transaction, checking if the Mobile App owns the account
 transaction_handler(State, SourceAccount, TargetAccount, Amount, Mobile_app_ID)->
     case maps:is_key(SourceAccount, State#bank_state.accounts) of
@@ -80,7 +83,8 @@ transaction_handler(State, SourceAccount, TargetAccount, Amount, Mobile_app_ID)-
 person_has_account_handler(State, PersonID, MobileAppID) ->
     case has_an_account(State#bank_state.accounts,PersonID) of
         true ->
-            MobileAppID ! {account_ownership_positive, State#bank_state.bank_name},
+            AccountNumber = get_account_number(State#bank_state.accounts, PersonID),
+            MobileAppID ! {account_ownership_positive, State#bank_state.bank_name, AccountNumber},
             State;
         false ->
             MobileAppID ! {account_ownership_negative, PersonID, State#bank_state.bank_name},

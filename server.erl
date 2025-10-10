@@ -3,7 +3,7 @@
 -module(server).
 -import(lists,[member/2]).
 -export([start/1, start_reg/1, init/1, loop/1]).
--record(server_state, {server_name, mobile_app_list, people_list, bank_list, pending_to_verify_transactions, sent_to_bank_transactions, completed_transactions, failed_transactions, last_transaction_number, started}).
+-record(server_state, {server_name, mobile_app_list, people_list, bank_list, sent_to_bank_transactions, completed_transactions, failed_transactions, last_transaction_number, started}).
 
 %% Function that spawns an account actor
 start(ServerName) ->
@@ -17,7 +17,7 @@ start_reg(ServerName) ->
 
 %% Function that initalizes the state of the server actor
 init(ServerName) ->
-    State = #server_state{server_name = ServerName, mobile_app_list = #{}, people_list = [], bank_list = [], pending_to_verify_transactions = #{}, sent_to_bank_transactions =#{}, completed_transactions = #{}, failed_transactions = #{}, last_transaction_number=0, started = false},
+    State = #server_state{server_name = ServerName, mobile_app_list = #{}, people_list = [], bank_list = [], sent_to_bank_transactions =#{}, completed_transactions = #{}, failed_transactions = #{}, last_transaction_number=0, started = false},
     loop(State).
 
 %% Function with the behavior of the server actor upon receiving messages
@@ -35,17 +35,14 @@ loop(State) ->
         {make_payment, MobileAppSource, MobileAppTarget, Amount} ->
             NewState = make_payment(State, MobileAppSource, MobileAppTarget, Amount),
             loop(NewState);
-        {app_verification, MobileAppID, Role, TransactionNumber, Verified} ->
-            NewState = app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified),
-            loop(NewState);
         {new_mobile_app, MobileAppID} ->
             NewState = new_mobile_app_handler(State, MobileAppID),
             loop(NewState);
         {person_added_to_app, MobileAppID, PersonID} ->
             NewState = person_added_to_app_handler(State, MobileAppID, PersonID),
             loop(NewState);
-        {bank_added_to_app, MobileAppID, BankName} ->
-            NewState = bank_added_to_app_handler(State, MobileAppID, BankName),
+        {bank_added_to_app, MobileAppID, BankName, AccountNumber} ->
+            NewState = bank_added_to_app_handler(State, MobileAppID, BankName, AccountNumber),
             loop(NewState);
         print_banks_list ->
             print_bank_list(State),
@@ -55,9 +52,6 @@ loop(State) ->
             loop(State);
         print_mobileapp_list ->
             print_mobile_app_list(State),
-            loop(State);
-        print_pending_to_verify_transactions ->
-            print_pending_to_verify_transactions(State),
             loop(State);
         print_sent_to_bank_transactions ->
             print_sent_to_bank_transactions(State),
@@ -86,7 +80,6 @@ start_model(State) ->
                     {signe, "Signe Taliones"},
                     {olivia, "Olivia Hansen"},
                     {noah, "Noah Klasz"}
-                    
                 ],
                 Apps = [app1, app2, app3, app4, app5, app6, app7, app8],
                 PersonIDs = [person:start_reg(ID, Name) || {ID, Name} <- Persons],
@@ -174,40 +167,25 @@ make_payment(State, MobileAppSource, MobileAppTarget, Amount) ->
             MobileAppSource ! {payment_failed_amount, MobileAppTarget, Amount},
             State;
         false ->
+            MobileAppList = State#server_state.mobile_app_list,
             NewTransactionNumber = State#server_state.last_transaction_number + 1,
-            Transaction = #{
-                source => MobileAppSource,
-                target => MobileAppTarget,
-                source_verified => false,
-                target_verified => false,
-                apps_verified => false,
-                successful => false,
-                amount => Amount
-            },
-            Pending = State#server_state.pending_to_verify_transactions,
-            UpdatedPendingTransactions = Pending#{NewTransactionNumber => Transaction},
-            NewState = State#server_state{
-                pending_to_verify_transactions = UpdatedPendingTransactions,
-                last_transaction_number = NewTransactionNumber
-                },
-            MobileAppSource ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 0, Amount, State#server_state.server_name, NewTransactionNumber},
-            MobileAppTarget ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 1, Amount, State#server_state.server_name, NewTransactionNumber},
-            NewState
+            notify_mobile_apps(MobileAppSource,MobileAppTarget,Amount,NewTransactionNumber),
+            case {mobile_app_is_in_list(MobileAppSource,MobileAppList), mobile_app_is_in_list(MobileAppTarget,MobileAppList)} of
+                {false, false} ->
+                    NewState = source_and_target_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount),
+                    NewState;
+                {false, true} ->
+                    NewState = source_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount),
+                    NewState;
+                {true, false} ->
+                    NewState = target_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount),
+                    NewState;
+                {true, true} ->
+                    NewState = apps_registered(State, MobileAppSource, MobileAppTarget, Amount, NewTransactionNumber),
+                    NewState
+            end
     end.
 
-print_pending_to_verify_transactions(State) ->
-    Map = State#server_state.pending_to_verify_transactions,
-    case Map =:= #{} of
-        true ->
-            io:format("There are not transactions pending.~n");
-        false ->
-            io:format("The following transactions are pending.~n"),
-            lists:foreach(
-                fun({K, V}) ->
-                    io:format("~p => ~p~n", [K, V])
-                end,
-                maps:to_list(Map))
-    end.
 
 print_sent_to_bank_transactions(State) ->
     Map = State#server_state.sent_to_bank_transactions,
@@ -251,63 +229,6 @@ print_completed_transactions(State) ->
                 maps:to_list(Map))
     end.
 
-app_verification_handler(State, MobileAppID, Role, TransactionNumber, Verified) ->
-    Pending = State#server_state.pending_to_verify_transactions,
-    case maps:is_key(TransactionNumber, Pending) of
-        false ->
-            io:format("Error: Mobile app ~p sent a verification response for the Transaction Number ~p but this transaction was not pending.~n",
-        [MobileAppID, TransactionNumber]),
-        State;
-        true ->
-            Transaction = maps:get(TransactionNumber, Pending),
-            MobileAppSource = maps:get(source, Transaction), 
-            MobileAppTarget = maps:get(target, Transaction),
-            Amount = maps:get(amount, Transaction),
-            case Verified of
-                false ->
-                    MobileAppSource ! {payment_failed_source, MobileAppTarget, TransactionNumber, Amount, Role},
-                    MobileAppTarget ! {payment_failed_target, MobileAppTarget, TransactionNumber, Amount, Role},
-                    Failed = State#server_state.failed_transactions,
-                    NewPenging = maps:remove(TransactionNumber, Pending),
-                    NewFailed = Failed#{TransactionNumber =>Transaction},
-                    NewState = State#server_state{pending_to_verify_transactions = NewPenging,
-                        failed_transactions = NewFailed},
-                    NewState;
-                true ->
-                    UpdatedTransaction = update_transaction(Transaction, Role),
-                    case maps:get(apps_verified,UpdatedTransaction) of
-                        false ->
-                            UpdatedPendingTransactions = Pending#{TransactionNumber := UpdatedTransaction},
-                            NewState = State#server_state{pending_to_verify_transactions = UpdatedPendingTransactions},
-                            NewState;
-                        true ->
-                            io:format("Transaction on it's way")
-                            
-                    end
-                    
-            end
-    end.
-
-update_transaction(Transaction, Role) ->
-    UpdatedRoleTransaction = update_one_role(Transaction, Role),
-    SourceVerified = maps:get(source_verified, UpdatedRoleTransaction),
-    TargetVerified = maps:get(target_verified, UpdatedRoleTransaction),
-    case (SourceVerified and TargetVerified) of
-        true ->
-            UpdatedRoleTransaction#{apps_verified := true};
-        false ->
-            UpdatedRoleTransaction
-    end.
-
-update_one_role(Transaction, Role) ->
-    case Role of
-        0 ->
-            Transaction#{source_verified := true};
-        1 ->
-            Transaction#{target_verified := true}
-    end.
-
-
 new_mobile_app_handler(State, MobileAppID) ->
     MobileAppList = State#server_state.mobile_app_list,
     case maps:is_key(MobileAppID, MobileAppList) of
@@ -318,6 +239,7 @@ new_mobile_app_handler(State, MobileAppID) ->
             NewMobileApp = #{
                 person => undefined,
                 bank => undefined,
+                account => undefined,
                 verified => false
             },
             UpdatedMobileAppList = MobileAppList#{MobileAppID => NewMobileApp},
@@ -333,20 +255,33 @@ person_added_to_app_handler(State, MobileAppID, PersonID) ->
             MobileAppID ! {app_not_registered_in_server, PersonID},
             State;
         _ ->
-            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp,PersonID,"Person"),
+            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp, PersonID),
             UpdatedMobileAppList = MobileAppList#{MobileAppID => UpdatedMobileApp},
             State#server_state{mobile_app_list = UpdatedMobileAppList}
     end.
 
-mobile_app_update(MobileApp,DataToUpdate,TypeOfData) ->
-    case TypeOfData of 
-        "Bank" ->
-            UpdateMobileApp = MobileApp#{bank => DataToUpdate},
-            mobile_app_verified_updater(UpdateMobileApp);
-        "Person" ->
-            UpdateMobileApp = MobileApp#{person => DataToUpdate},
-            mobile_app_verified_updater(UpdateMobileApp)
+bank_added_to_app_handler(State, MobileAppID, BankName, AccountNumber) ->
+    MobileAppList = State#server_state.mobile_app_list,
+    RegisteredMobileApp = maps:get(MobileAppID,MobileAppList, undefined),
+    case RegisteredMobileApp of
+        undefined ->
+            MobileAppID ! {app_not_registered_in_server, BankName},
+            State;
+        _ ->
+            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp, BankName, AccountNumber),
+            UpdatedMobileAppList = MobileAppList#{MobileAppID => UpdatedMobileApp},
+            State#server_state{mobile_app_list = UpdatedMobileAppList}
     end.
+
+
+mobile_app_update(MobileApp, DataToUpdate) ->
+    UpdateMobileApp = MobileApp#{person => DataToUpdate},
+    mobile_app_verified_updater(UpdateMobileApp).
+
+mobile_app_update(MobileApp, DataToUpdate, AccountNumber) ->
+    UpdateMobileApp = MobileApp#{bank => DataToUpdate, account => AccountNumber},
+    mobile_app_verified_updater(UpdateMobileApp).
+
 
 mobile_app_verified_updater(MobileApp) ->
     Bank   = maps:get(bank, MobileApp),
@@ -359,18 +294,133 @@ mobile_app_verified_updater(MobileApp) ->
     end.
 
 
-bank_added_to_app_handler(State, MobileAppID, BankName) ->
-    MobileAppList = State#server_state.mobile_app_list,
-    RegisteredMobileApp = maps:get(MobileAppID,MobileAppList, undefined),
-    case RegisteredMobileApp of
-        undefined ->
-            MobileAppID ! {app_not_registered_in_server, BankName},
-            State;
-        _ ->
-            UpdatedMobileApp = mobile_app_update(RegisteredMobileApp,BankName,"Bank"),
-            UpdatedMobileAppList = MobileAppList#{MobileAppID => UpdatedMobileApp},
-            State#server_state{mobile_app_list = UpdatedMobileAppList}
+
+new_transaction(MobileAppSource,MobileAppTarget,Amount) -> 
+    Transaction = #{
+                source => MobileAppSource,
+                target => MobileAppTarget,
+                source_verified => false,
+                target_verified => false,
+                apps_verified => false,
+                successful => false,
+                amount => Amount
+            },
+    case {mobile_app_is_verified(MobileAppSource),mobile_app_is_verified(MobileAppTarget)} of
+        {false, false} ->
+            Transaction;
+        {false, true} ->
+            Transaction#{reason => "Source App was missing a bank or a person",target_verified => true};
+        {true, false} ->
+            Transaction#{reason => "Target App was missing a bank or a person", source_verified => true};
+        {true, true} ->
+            Transaction#{source_verified => true, target_verified => true, apps_verified => true}
     end.
+
+
+
+notify_mobile_apps(MobileAppSource,MobileAppTarget,Amount,NewTransactionNumber) ->
+    MobileAppSource ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 0, Amount, NewTransactionNumber},
+    MobileAppTarget ! {transaction_received_by_server, MobileAppSource, MobileAppTarget, 1, Amount, NewTransactionNumber}.
+
+mobile_app_is_in_list(MobileAppId, MobileAppList)->
+    maps:is_key(MobileAppId, MobileAppList).
+
+mobile_app_is_verified(MobileAppId)->
+    maps:get(verified, MobileAppId).
+
+new_failed_transaction(MobileAppSource, MobileAppTarget, Amount, Reason) ->
+    Transaction = #{
+                source => MobileAppSource,
+                target => MobileAppTarget,
+                source_verified => false,
+                target_verified => false,
+                apps_verified => false,
+                successful => false,
+                amount => Amount,
+                reason => Reason
+            },
+    Transaction.
+
+source_and_target_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount) ->
+    MobileAppSource ! {payment_failed_non_registered_both, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount, "Source"},
+    MobileAppTarget ! {payment_failed_non_registered_both, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount, "Target"},
+    FailedTransaction = new_failed_transaction(MobileAppSource, MobileAppTarget,Amount, "None of the Apps is registered in the server"),
+    FailedTransactions = State#server_state.failed_transactions,
+    UpdatedFailedTransactions = FailedTransactions#{NewTransactionNumber => FailedTransaction},
+    State#server_state{failed_transactions = UpdatedFailedTransactions, last_transaction_number = NewTransactionNumber}.
+
+source_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount)->
+    MobileAppSource ! {payment_failed_non_registered_source, MobileAppTarget, NewTransactionNumber, Amount, 0},
+    MobileAppTarget ! {payment_failed_non_registered_target, MobileAppSource, NewTransactionNumber, Amount, 0},
+    FailedTransaction = new_failed_transaction(MobileAppSource, MobileAppTarget,Amount, "The source App is not registered in the server"),
+    FailedTransactions = State#server_state.failed_transactions,
+    UpdatedFailedTransactions = FailedTransactions#{NewTransactionNumber => FailedTransaction},
+    State#server_state{failed_transactions = UpdatedFailedTransactions, last_transaction_number = NewTransactionNumber}.
+
+target_not_registered(State, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount) ->
+    MobileAppSource ! {payment_failed_non_registered_source, MobileAppTarget, NewTransactionNumber, Amount, 1},
+                    MobileAppTarget ! {payment_failed_non_registered_target, MobileAppSource, NewTransactionNumber, Amount, 1},
+                    FailedTransaction = new_failed_transaction(MobileAppSource, MobileAppTarget,Amount, "The target App is not registered in the server"),
+                    FailedTransactions = State#server_state.failed_transactions,
+                    UpdatedFailedTransactions = FailedTransactions#{NewTransactionNumber => FailedTransaction},
+                    State#server_state{failed_transactions = UpdatedFailedTransactions, last_transaction_number = NewTransactionNumber}.
+
+
+
+
+
+notifiy_mobile_apps_failed_registry(Transaction, NewTransactionNumber) ->
+    MobileAppSource = maps:get(source, Transaction),
+    MobileAppTarget = maps:get(target, Transaction),
+    Amount = maps:get(amount, Transaction),
+    case {maps:get(source_verified, Transaction), maps:get(target_verified, Transaction)} of
+        {false, false} ->
+            MobileAppSource ! {payment_failed_both, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount, "Source"},
+            MobileAppTarget ! {payment_failed_both, MobileAppSource, MobileAppTarget, NewTransactionNumber, Amount, "Target"};
+        {false, true} ->
+            MobileAppSource ! {payment_failed_source, MobileAppTarget, NewTransactionNumber, Amount, 0},
+            MobileAppTarget ! {payment_failed_target, MobileAppSource, NewTransactionNumber, Amount, 0};
+        {true, false} ->
+            MobileAppSource ! {payment_failed_source, MobileAppTarget, NewTransactionNumber, Amount, 1},
+            MobileAppTarget ! {payment_failed_target, MobileAppSource, NewTransactionNumber, Amount, 1}
+    end.
+
+apps_registered(State, MobileAppSource, MobileAppTarget, Amount, NewTransactionNumber) ->
+    MobileAppList = State#server_state.mobile_app_list,
+    Transaction = new_transaction(maps:get(MobileAppSource,MobileAppList), maps:get(MobileAppTarget, MobileAppList), Amount),
+    case maps:get(apps_verified, Transaction) of
+        false ->
+            FailedTransactions = State#server_state.failed_transactions,
+            UpdatedFailedTransactions = FailedTransactions#{NewTransactionNumber => Transaction},
+            notifiy_mobile_apps_failed_registry(Transaction, NewTransactionNumber),
+            State#server_state{failed_transactions = UpdatedFailedTransactions, last_transaction_number = NewTransactionNumber};
+        true ->
+            SourceAccount = get_source_account(MobileAppSource, MobileAppList),
+            BankOfSource = get_source_bank(MobileAppSource, MobileAppList),
+            TargetAccount = get_target_account(MobileAppTarget, MobileAppList),
+            Amount = maps:get(amount, Transaction),
+            io:format("The Source account of ~p is ~p. The Target account of ~p is ~p. Is that an error? ~n", [MobileAppSource, SourceAccount, MobileAppTarget, TargetAccount]),
+            BankOfSource ! {transaction, SourceAccount, TargetAccount, Amount, MobileAppSource},
+            SentToBankTransactions = State#server_state.sent_to_bank_transactions,
+            UpdatedSentToBankTransactions = SentToBankTransactions#{NewTransactionNumber => Transaction},
+            State#server_state{sent_to_bank_transactions = UpdatedSentToBankTransactions, last_transaction_number = NewTransactionNumber}
+    end.
+
+get_source_account(MobileAppSource, MobileAppList) ->
+    MobileApp = maps:get(MobileAppSource, MobileAppList),
+    maps:get(account, MobileApp).
+
+get_target_account(MobileAppTarget, MobileAppList) ->
+    MobileApp = maps:get(MobileAppTarget, MobileAppList),
+    maps:get(account, MobileApp).
+
+get_source_bank(MobileAppSource, MobileAppList) ->
+    MobileApp = maps:get(MobileAppSource, MobileAppList),
+    maps:get(bank, MobileApp).
+
+
+            
+            %TODO. Send the payment request to the bank.
 
 % TODO Adding a person and a bank to a Mobile app should be done trough a request TO the server
 % Right now is a request to the app, but the server should handle it instead as a request. 
